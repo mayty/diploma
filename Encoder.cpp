@@ -6,12 +6,12 @@
 #include "encoding_machine.h"
 
 
-static std::unordered_map<size_t, std::unique_ptr<encoding_machine<32, 8>>> encoders;
+static std::unordered_map<size_t, std::unique_ptr<encoding_machine<8, 8>>> encoders;
 static size_t next_handle = 0;
 
 size_t create_encoder()
 {
-    encoders[next_handle] = std::make_unique<encoding_machine<32, 8>>();
+    encoders[next_handle] = std::make_unique<encoding_machine<8, 8>>();
     return next_handle++;
 }
 
@@ -34,6 +34,11 @@ void feed_data_to_encoder(size_t handle, BYTE* data, size_t data_size)
 void encode_data(size_t handle)
 {
     encoders[handle]->encode_data();
+}
+
+void encode_to_file(size_t handle, const char* filename)
+{
+    encoders[handle]->save_to_file(std::string{ filename });
 }
 
 size_t get_encoded_bits_count(size_t handle)

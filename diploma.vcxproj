@@ -156,6 +156,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Decoder.h" />
+    <ClInclude Include="decoding_machine.h" />
     <ClInclude Include="Encoder.h" />
     <ClInclude Include="encoding_machine.h" />
     <ClInclude Include="framework.h" />
@@ -166,6 +167,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Decoder.cpp" />
+    <ClCompile Include="decoding_machine.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Encoder.cpp" />
     <ClCompile Include="encoding_machine.cpp" />
