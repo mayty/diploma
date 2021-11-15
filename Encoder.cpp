@@ -6,12 +6,12 @@
 #include "encoding_machine.h"
 
 
-static std::unordered_map<size_t, std::unique_ptr<encoding_machine<8, 8>>> encoders;
+static std::unordered_map<size_t, std::unique_ptr<encoding_machine<16, 8>>> encoders;
 static size_t next_handle = 0;
 
 size_t create_encoder()
 {
-    encoders[next_handle] = std::make_unique<encoding_machine<8, 8>>();
+    encoders[next_handle] = std::make_unique<encoding_machine<16, 8>>();
     return next_handle++;
 }
 

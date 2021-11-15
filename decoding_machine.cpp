@@ -1,25 +1,83 @@
 #include "pch.h"
 #include "decoding_machine.h"
+#include "helpers.h"
 #include <fstream>
 
 size_t decoding_machine::get_decoded_bits_count()
 {
-	return size_t();
+	if (!data_decoded)
+	{
+		decode_data();
+	}
+	return sample_count * sample_resolution;
 }
 
 std::vector<BYTE> decoding_machine::get_decoded_data()
 {
-	return std::vector<BYTE>();
+	if (!data_decoded)
+	{
+		decode_data();
+	}
+	return decoded_data;
 }
 
 void decoding_machine::feed_data_from_file(const std::string& filename)
 {
 	std::ifstream file = std::ifstream{ filename, std::ifstream::in | std::ifstream::binary };
 	init_from_file(file);
+	read_data_from_file(file);
 }
 
 void decoding_machine::decode_data()
 {
+	size_t i_encoded = 0;
+	size_t i_decoded = 0;
+	size_t read_sample_count = 0;
+	size_t prefix_size = get_prefix_size();
+	// get block encoding type
+	while (read_sample_count < sample_count)
+	{
+		size_t prefix = 0;
+		bool extended_prefix = false;
+		for (int j = 0; j < prefix_size; ++j)
+		{
+			prefix <<= 1;
+			if (get_bit(encoded_data, i_encoded++))
+			{
+				prefix |= 1;
+			}
+		}
+		if (prefix == 0)
+		{
+			extended_prefix = true;
+			prefix <<= 1;
+			if (get_bit(encoded_data, i_encoded++))
+			{
+				prefix |= 1;
+			}
+		}
+
+		if (prefix == (1 << prefix_size) - 1)  // no compression
+		{
+			read_sample_count += decode_no_compression(i_encoded, i_decoded);
+		}
+		else if (prefix == 0)  // Zero-Block
+		{
+			read_sample_count += decode_zero_block(i_encoded, i_decoded);
+		}
+		else if (extended_prefix)  // Second-Extension
+		{
+			read_sample_count += decode_second_extension(i_encoded, i_decoded);
+		}
+		else if (prefix == 1) // fundamental sequence
+		{
+			read_sample_count += decode_fundamental_sequence(i_encoded, i_decoded);
+		}
+		else  // split sample
+		{
+			read_sample_count += decode_k(i_encoded, i_decoded, prefix - 1);
+		}
+	}
 }
 
 void decoding_machine::init_from_file(std::ifstream& in)
@@ -36,7 +94,7 @@ void decoding_machine::init_from_file(std::ifstream& in)
 	if (header[3] & 0b10000000 || !(header[3] & 0b00010000))
 		throw std::exception{};
 	block_size = (header[3] & 0b01100000) >> 5;
-	block_size = 8 << block_size;
+	block_size = 8ull << block_size;
 	reference_sample_interval = 0;
 	for (int i = 0; i < 4; ++i)
 	{
@@ -54,4 +112,113 @@ void decoding_machine::init_from_file(std::ifstream& in)
 		sample_count <<= 1;
 		sample_count |= (header[6 + (i / 8)] >> (7 - (i % 8))) & 1;
 	}
+}
+
+void decoding_machine::read_data_from_file(std::ifstream& in)
+{
+	encoded_data.clear();
+	do
+	{
+		BYTE in_buf[64];
+		in.read((char*)in_buf, 64);
+		if (in)
+		{
+			for (int i = 0; i < sizeof(in_buf) / sizeof(BYTE); ++i)
+			{
+				encoded_data.push_back(in_buf[i]);
+			}
+		}
+		else
+		{
+			for (int i = 0; i < in.gcount(); ++i)
+			{
+				encoded_data.push_back(in_buf[i]);
+			}
+		}
+	} while (in);
+}
+
+size_t decoding_machine::get_prefix_size()
+{
+	if (sample_resolution <= 2)
+		return 1;
+	if (sample_resolution <= 4)
+		return 2;
+	if (sample_resolution <= 8)
+		return 3;
+	if (sample_resolution <= 16)
+		return 4;
+	if (sample_resolution <= 32)
+		return 5;
+}
+
+size_t decoding_machine::decode_no_compression(size_t& i_encoded, size_t& i_decoded)
+{
+	for (int i = 0; i < sample_resolution * block_size; ++i)
+	{
+		set_bit(decoded_data, i_decoded++, get_bit(encoded_data, i_encoded++));
+	}
+	return block_size;
+}
+
+size_t decoding_machine::decode_zero_block(size_t& i_encoded, size_t& i_decoded)
+{
+	throw std::exception{};
+	return size_t();
+}
+
+size_t decoding_machine::decode_second_extension(size_t& i_encoded, size_t& i_decoded)
+{
+	throw std::exception{};
+	return size_t();
+}
+
+size_t decoding_machine::decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded)
+{
+	for (int i = 0; i < block_size; ++i)
+	{
+		size_t sample = 0;
+		while (!get_bit(encoded_data, i_encoded++))
+		{
+			sample += 1;
+		}
+		for (int j = 1; j <= sample_resolution; ++j)
+		{
+			set_bit(decoded_data, i_decoded++, (sample >> (sample_resolution - j)) & 1);
+		}
+	}
+	return block_size;
+}
+
+size_t decoding_machine::decode_k(size_t& i_encoded, size_t& i_decoded, size_t k)
+{
+	size_t* elder_bits = new size_t[block_size];
+	for (int i = 0; i < block_size; ++i)
+	{
+		size_t sample = 0;
+		while (!get_bit(encoded_data, i_encoded++))
+		{
+			sample += 1;
+		}		
+		elder_bits[i] = sample << k;
+	}
+	for (int i = 0; i < block_size; ++i)
+	{
+		size_t sample = 0;
+		for (int j = 0; j < k; ++j)
+		{
+			sample <<= 1;
+			if (get_bit(encoded_data, i_encoded++))
+			{
+				sample |= 1;
+			}
+		}
+		sample |= elder_bits[i];
+		for (int j = 1; j <= sample_resolution; ++j)
+		{
+			set_bit(decoded_data, i_decoded++, (sample >> (sample_resolution - j)) & 1);
+		}
+	}
+	delete[] elder_bits;
+	return block_size;
 }

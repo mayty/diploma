@@ -29,12 +29,6 @@ void decode_from_file(size_t handle, const char* filename)
     decoders[handle]->feed_data_from_file(std::string{ filename });
 }
 
-
-size_t get_decoded_length(size_t handle)
-{
-    return size_t();
-}
-
 size_t get_decoded_bits_count(size_t handle)
 {
     return decoders[handle]->get_decoded_bits_count();
@@ -42,10 +36,10 @@ size_t get_decoded_bits_count(size_t handle)
 
 void get_decoded_data(size_t handle, BYTE* data_buf)
 {
-    auto encoded_data = decoders[handle]->get_decoded_data();
-    for (size_t i = 0; i < encoded_data.size(); ++i)
+    auto decoded_data = decoders[handle]->get_decoded_data();
+    for (size_t i = 0; i < decoded_data.size(); ++i)
     {
-        data_buf[i] = encoded_data[i];
+        data_buf[i] = decoded_data[i];
     }
 }
 
