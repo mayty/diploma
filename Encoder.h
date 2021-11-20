@@ -7,7 +7,7 @@
 #define ENCODER_API __declspec(dllimport)
 #endif
 
-extern "C" ENCODER_API size_t create_encoder();
+extern "C" ENCODER_API size_t create_encoder(unsigned int sample_resolution, unsigned int block_size);
 extern "C" ENCODER_API void destroy_encoder(size_t handle);
 extern "C" ENCODER_API void feed_data_to_encoder(size_t handle, BYTE* data, size_t data_size);
 extern "C" ENCODER_API void encode_data(size_t handle);

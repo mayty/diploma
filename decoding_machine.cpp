@@ -33,9 +33,10 @@ void decoding_machine::decode_data()
 	size_t i_encoded = 0;
 	size_t i_decoded = 0;
 	size_t read_sample_count = 0;
+	int64_t samples_to_read_count = sample_count;
 	size_t prefix_size = get_prefix_size();
 	// get block encoding type
-	while (read_sample_count < sample_count)
+	while (samples_to_read_count > 0)
 	{
 		size_t prefix = 0;
 		bool extended_prefix = false;
@@ -59,23 +60,23 @@ void decoding_machine::decode_data()
 
 		if (prefix == (1 << prefix_size) - 1)  // no compression
 		{
-			read_sample_count += decode_no_compression(i_encoded, i_decoded);
+			samples_to_read_count -= decode_no_compression(i_encoded, i_decoded, samples_to_read_count);
 		}
 		else if (prefix == 0)  // Zero-Block
 		{
-			read_sample_count += decode_zero_block(i_encoded, i_decoded);
+			samples_to_read_count -= decode_zero_block(i_encoded, i_decoded, samples_to_read_count);
 		}
 		else if (extended_prefix)  // Second-Extension
 		{
-			read_sample_count += decode_second_extension(i_encoded, i_decoded);
+			samples_to_read_count -= decode_second_extension(i_encoded, i_decoded, samples_to_read_count);
 		}
 		else if (prefix == 1) // fundamental sequence
 		{
-			read_sample_count += decode_fundamental_sequence(i_encoded, i_decoded);
+			samples_to_read_count -= decode_fundamental_sequence(i_encoded, i_decoded, samples_to_read_count);
 		}
 		else  // split sample
 		{
-			read_sample_count += decode_k(i_encoded, i_decoded, prefix - 1);
+			samples_to_read_count -= decode_k(i_encoded, i_decoded, prefix - 1, samples_to_read_count);
 		}
 	}
 }
@@ -152,30 +153,48 @@ size_t decoding_machine::get_prefix_size()
 		return 5;
 }
 
-size_t decoding_machine::decode_no_compression(size_t& i_encoded, size_t& i_decoded)
+size_t decoding_machine::decode_no_compression(size_t& i_encoded, size_t& i_decoded, size_t samples_left)
 {
-	for (int i = 0; i < sample_resolution * block_size; ++i)
+	size_t required_samples_count = min(block_size, samples_left);
+
+	for (int i = 0; i < sample_resolution * required_samples_count; ++i)
 	{
 		set_bit(decoded_data, i_decoded++, get_bit(encoded_data, i_encoded++));
 	}
-	return block_size;
+	return required_samples_count;
 }
 
-size_t decoding_machine::decode_zero_block(size_t& i_encoded, size_t& i_decoded)
+size_t decoding_machine::decode_zero_block(size_t& i_encoded, size_t& i_decoded, size_t samples_left)
+{
+	size_t trailing_zeroes_count = 0;
+	while (!get_bit(encoded_data, i_encoded++))
+	{
+		trailing_zeroes_count += 1;
+	}
+	size_t zero_blocks_count = trailing_zeroes_count;
+	if (trailing_zeroes_count < 4)
+	{
+		zero_blocks_count += 1;
+	}
+	size_t samples_count = min(zero_blocks_count * block_size, samples_left);
+	for (int i = 0; i < samples_count * sample_resolution; ++i)
+	{
+		set_bit(decoded_data, i_decoded++, false);
+	}
+
+	return samples_count;
+}
+
+size_t decoding_machine::decode_second_extension(size_t& i_encoded, size_t& i_decoded, size_t samples_left)
 {
 	throw std::exception{};
 	return size_t();
 }
 
-size_t decoding_machine::decode_second_extension(size_t& i_encoded, size_t& i_decoded)
+size_t decoding_machine::decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded, size_t samples_left)
 {
-	throw std::exception{};
-	return size_t();
-}
-
-size_t decoding_machine::decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded)
-{
-	for (int i = 0; i < block_size; ++i)
+	size_t required_samples_count = min(samples_left, block_size);
+	for (int i = 0; i < required_samples_count; ++i)
 	{
 		size_t sample = 0;
 		while (!get_bit(encoded_data, i_encoded++))
@@ -187,22 +206,27 @@ size_t decoding_machine::decode_fundamental_sequence(size_t& i_encoded, size_t& 
 			set_bit(decoded_data, i_decoded++, (sample >> (sample_resolution - j)) & 1);
 		}
 	}
-	return block_size;
+	return required_samples_count;
 }
 
-size_t decoding_machine::decode_k(size_t& i_encoded, size_t& i_decoded, size_t k)
+size_t decoding_machine::decode_k(size_t& i_encoded, size_t& i_decoded, size_t k, size_t samples_left)
 {
-	size_t* elder_bits = new size_t[block_size];
+	size_t required_samples_count = min(samples_left, block_size);
+	std::vector<size_t> elder_bits{};
+	elder_bits.resize(required_samples_count);
 	for (int i = 0; i < block_size; ++i)
 	{
 		size_t sample = 0;
 		while (!get_bit(encoded_data, i_encoded++))
 		{
 			sample += 1;
-		}		
-		elder_bits[i] = sample << k;
+		}
+		if (i < required_samples_count)
+		{
+			elder_bits[i] = sample << k;
+		}
 	}
-	for (int i = 0; i < block_size; ++i)
+	for (int i = 0; i < required_samples_count; ++i)
 	{
 		size_t sample = 0;
 		for (int j = 0; j < k; ++j)
@@ -219,6 +243,5 @@ size_t decoding_machine::decode_k(size_t& i_encoded, size_t& i_decoded, size_t k
 			set_bit(decoded_data, i_decoded++, (sample >> (sample_resolution - j)) & 1);
 		}
 	}
-	delete[] elder_bits;
-	return block_size;
+	return required_samples_count;
 }

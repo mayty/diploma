@@ -22,10 +22,10 @@ private:
 	void init_from_file(std::ifstream& in);
 	void read_data_from_file(std::ifstream& in);
 	size_t get_prefix_size();
-	size_t decode_no_compression(size_t& i_encoded, size_t& i_decoded);
-	size_t decode_zero_block(size_t& i_encoded, size_t& i_decoded);
-	size_t decode_second_extension(size_t& i_encoded, size_t& i_decoded);
-	size_t decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded);
-	size_t decode_k(size_t& i_encoded, size_t& i_decoded, size_t k);
+	size_t decode_no_compression(size_t& i_encoded, size_t& i_decoded, size_t samples_left);
+	size_t decode_zero_block(size_t& i_encoded, size_t& i_decoded, size_t samples_left);
+	size_t decode_second_extension(size_t& i_encoded, size_t& i_decoded, size_t samples_left);
+	size_t decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded, size_t samples_left);
+	size_t decode_k(size_t& i_encoded, size_t& i_decoded, size_t k, size_t samples_left);
 };
 
