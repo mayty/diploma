@@ -29,6 +29,12 @@ void decode_from_file(size_t handle, const char* filename)
     decoders[handle]->feed_data_from_file(std::string{ filename });
 }
 
+void decode_file_to_file(size_t handle, const char* source_file, const char* destination_file)
+{
+    decoders[handle]->feed_data_from_file(std::string{ source_file });
+    decoders[handle]->save_to_file(std::string{ destination_file });
+}
+
 size_t get_decoded_bits_count(size_t handle)
 {
     return decoders[handle]->get_decoded_bits_count();

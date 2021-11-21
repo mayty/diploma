@@ -28,6 +28,20 @@ void decoding_machine::feed_data_from_file(const std::string& filename)
 	read_data_from_file(file);
 }
 
+void decoding_machine::save_to_file(const std::string& filename)
+{
+	if (!data_decoded)
+	{
+		this->decode_data();
+	}
+
+	std::ofstream file{ filename, std::ofstream::out | std::ofstream::binary };
+	for (BYTE byte : decoded_data)
+	{
+		file.write((const char*)(&byte), 1);
+	}
+}
+
 void decoding_machine::decode_data()
 {
 	size_t i_encoded = 0;
@@ -131,6 +145,7 @@ void decoding_machine::decode_data()
 			block_i += decoded_samples_count / block_size;
 		}
 	}
+	data_decoded = true;
 }
 
 void decoding_machine::init_from_file(std::ifstream& in)
@@ -171,6 +186,8 @@ void decoding_machine::init_from_file(std::ifstream& in)
 void decoding_machine::read_data_from_file(std::ifstream& in)
 {
 	encoded_data.clear();
+	decoded_data.clear();
+	data_decoded = false;
 	do
 	{
 		BYTE in_buf[64];
@@ -267,8 +284,40 @@ size_t decoding_machine::decode_zero_block(size_t& i_encoded, size_t& i_decoded,
 
 size_t decoding_machine::decode_second_extension(size_t& i_encoded, size_t& i_decoded, size_t samples_left, bool reference)
 {
-	throw std::exception{};
-	return size_t();
+	size_t required_samples_count = min(samples_left, block_size);
+	if (reference)
+	{
+		required_samples_count -= 1;
+	}
+	size_t sample_i = 0;
+	while(sample_i < required_samples_count)
+	{
+		uint64_t sample = 0;
+		while (!get_bit(encoded_data, i_encoded++))
+		{
+			sample += 1;
+		}
+		auto [sample_1, sample_2] = unpack_samples(sample);
+		if (!(sample_i == 0 && reference))
+		{
+			sample_1 = reverser.get_value(sample_1);
+			for (int j = 1; j <= sample_resolution; ++j)
+			{
+				set_bit(decoded_data, i_decoded++, (sample_1 >> (sample_resolution - j)) & 1);
+			}
+			++sample_i;
+		}
+		if (sample_i < required_samples_count)
+		{
+			sample_2 = reverser.get_value(sample_2);
+			for (int j = 1; j <= sample_resolution; ++j)
+			{
+				set_bit(decoded_data, i_decoded++, (sample_2 >> (sample_resolution - j)) & 1);
+			}
+			++sample_i;
+		}
+	}
+	return required_samples_count;
 }
 
 size_t decoding_machine::decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded, size_t samples_left, bool reference)
@@ -336,4 +385,18 @@ size_t decoding_machine::decode_k(size_t& i_encoded, size_t& i_decoded, size_t k
 		}
 	}
 	return required_samples_count;
+}
+
+std::pair<uint32_t, uint32_t> decoding_machine::unpack_samples(uint64_t sample)
+{
+	uint64_t diagonal_i = 0;
+	uint64_t min_value = 0;
+	while (sample >= min_value)
+	{
+		min_value += diagonal_i++ + 1;
+	}
+	--diagonal_i;
+	uint32_t sample_a = (min_value - 1) - sample;
+	uint32_t sample_b = diagonal_i - sample_a;
+	return std::pair<uint32_t, uint32_t>{sample_a, sample_b};
 }

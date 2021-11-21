@@ -20,6 +20,11 @@ void destroy_encoder(size_t handle)
     encoders.erase(handle);
 }
 
+bool se_is_better(size_t handle)
+{
+    return encoders[handle]->se_better;
+}
+
 void feed_data_to_encoder(size_t handle, BYTE* data, size_t data_size)
 {
     std::vector<BYTE> data_vector;
@@ -39,6 +44,12 @@ void encode_data(size_t handle)
 void encode_to_file(size_t handle, const char* filename)
 {
     encoders[handle]->save_to_file(std::string{ filename });
+}
+
+void encode_file_to_file(size_t handle, const char* source_filename, const char* destinataion_filename)
+{
+    encoders[handle]->feed_data_from_file(std::string{ source_filename });
+    encoders[handle]->save_to_file(std::string{ destinataion_filename });
 }
 
 size_t get_encoded_bits_count(size_t handle)

@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include "helpers.h"
 
-uint64_t unit_delay_preprocesson::map(int64_t error)
+uint32_t unit_delay_preprocesson::map(int64_t error)
 {
 	int64_t theta = get_min(preceeding_sample, max_value - preceeding_sample);
 	if (error >= 0 && error <= theta)
@@ -21,7 +21,7 @@ uint64_t unit_delay_preprocesson::map(int64_t error)
 	return theta - error;
 }
 
-uint64_t unit_delay_preprocesson::get_reference()
+uint32_t unit_delay_preprocesson::get_reference()
 {
 	return preceeding_sample;
 }
@@ -36,7 +36,7 @@ unit_delay_preprocesson::unit_delay_preprocesson(unsigned int sample_size)
 	max_value = (1ll << sample_size) - 1;
 }
 
-uint64_t unit_delay_preprocesson::get_preprocessed(uint32_t sample)
+uint32_t unit_delay_preprocesson::get_preprocessed(uint32_t sample)
 {
 	int64_t signed_sample = sample;
 	int64_t error = signed_sample - preceeding_sample;

@@ -19,6 +19,7 @@ public:
 	size_t get_decoded_bits_count();
 	std::vector<BYTE> get_decoded_data();
 	void feed_data_from_file(const std::string& filename);
+	void save_to_file(const std::string& filename);
 	void decode_data();
 private:
 	void init_from_file(std::ifstream& in);
@@ -29,5 +30,6 @@ private:
 	size_t decode_second_extension(size_t& i_encoded, size_t& i_decoded, size_t samples_left, bool reference);
 	size_t decode_fundamental_sequence(size_t& i_encoded, size_t& i_decoded, size_t samples_left, bool reference);
 	size_t decode_k(size_t& i_encoded, size_t& i_decoded, size_t k, size_t samples_left, bool reference);
+	std::pair<uint32_t, uint32_t> unpack_samples(uint64_t sample);
 };
 
