@@ -91,9 +91,9 @@ void encoding_machine::encode_data()
                 }
             }
             zero_blocks_count += 1;
-            if (zero_blocks_count == 63 || reference)
+            if (zero_blocks_count == 63 || (reference && zero_blocks_count > 1))
             {
-                auto [encoded_zero_block, encoded_zero_block_size] = encode_zero_blocks(zero_blocks_count, zero_block_needs_ref);
+                auto [encoded_zero_block, encoded_zero_block_size] = encode_zero_blocks(zero_blocks_count, zero_block_needs_ref, zero_block_reference);
                 for (int i = 0; i < encoded_zero_block_size; ++i)
                 {
                     set_bit(result, bit_i++, get_bit(encoded_zero_block, i));
@@ -105,7 +105,7 @@ void encoding_machine::encode_data()
         }
         if (zero_blocks_count != 0)
         {
-            auto [encoded_zero_block, encoded_zero_block_size] = encode_zero_blocks(zero_blocks_count, zero_block_needs_ref);
+            auto [encoded_zero_block, encoded_zero_block_size] = encode_zero_blocks(zero_blocks_count, zero_block_needs_ref, zero_block_reference);
             for (int i = 0; i < encoded_zero_block_size; ++i)
             {
                 set_bit(result, bit_i++, get_bit(encoded_zero_block, i));
@@ -117,6 +117,16 @@ void encoding_machine::encode_data()
         {
             set_bit(result, bit_i++, get_bit(encoded_block, i));
         }
+    }
+    if (zero_blocks_count != 0)
+    {
+        auto [encoded_zero_block, encoded_zero_block_size] = encode_zero_blocks(zero_blocks_count, zero_block_needs_ref, zero_block_reference);
+        for (int i = 0; i < encoded_zero_block_size; ++i)
+        {
+            set_bit(result, bit_i++, get_bit(encoded_zero_block, i));
+        }
+        zero_blocks_count = 0;
+        zero_block_needs_ref = false;
     }
 
     this->encoded_data = result;
@@ -182,6 +192,10 @@ std::vector<std::vector<uint32_t>> encoding_machine::get_blocks()
                     blocks[sample_i / block_size].resize(block_size);
                 }
                 blocks[sample_i / block_size][sample_i % block_size] = sample;
+                if (sample_i == 0)
+                {
+                    preprocessor->get_preprocessed(sample);
+                }
                 ++sample_i;
                 sample = 0;
                 sample_completed = true;
@@ -221,7 +235,10 @@ std::pair<std::vector<BYTE>, size_t> encoding_machine::encode_block(const std::v
     }
     uint32_t reference_value = preprocessor->get_reference();
     std::vector<uint32_t> preprocessed_block{};
-    reference = false;
+    for (const auto sample : block)
+    {
+        preprocessed_block.push_back(preprocessor->get_preprocessed(sample));
+    }
     size_t se_size = 0; // TODO
     size_t no_compression_size = sample_resolution * block_size + no_compression_prefix_size;
     size_t k_size = 0;
@@ -234,7 +251,7 @@ std::pair<std::vector<BYTE>, size_t> encoding_machine::encode_block(const std::v
     // fundamental sequens is k = 0
 
     bool all_zero = true;
-    for (const auto sample : block)
+    for (const auto sample : preprocessed_block)
     {
         if (sample != 0)
         {
@@ -264,9 +281,9 @@ std::pair<std::vector<BYTE>, size_t> encoding_machine::encode_block(const std::v
         }
     }
     size_t prefix = min_size_k + 1;
-    if (min_size_k == -1)
+    if (min_size_k == -1) // no compression is best
     {
-        prefix = min_size_k + 2;
+        prefix = no_compression_prefix;
     }
 
     for (size_t i = 1; i <= no_compression_prefix_size; ++i) // store prefix
@@ -280,37 +297,69 @@ std::pair<std::vector<BYTE>, size_t> encoding_machine::encode_block(const std::v
     {
         for (size_t j = 1; j <= sample_resolution; ++j)
         {
-            bool val = (prefix >> (reference_value - i)) & 1;
+            bool val = (reference_value >> (sample_resolution - j)) & 1;
             set_bit(result.first, i++, val);
         }
     }
-
-    if (min_size_k != -1) // store samples
+    
+    if (prefix != no_compression_prefix)
     {
-        for (const auto sample : block)
+        if (min_size_k != -1) // store samples
         {
-            size_t fs_size = sample >> min_size_k;
-            for (int j = 0; j < fs_size; ++j)
+            int k = 0;
+            if (reference)
             {
-                set_bit(result.first, i++, false);
+                k = 1;
             }
-            set_bit(result.first, i++, true);
+            for (k; k < preprocessed_block.size(); ++k)
+            {
+                uint32_t sample = preprocessed_block[k];
+                size_t fs_size = sample >> min_size_k;
+                for (int j = 0; j < fs_size; ++j)
+                {
+                    set_bit(result.first, i++, false);
+                }
+                set_bit(result.first, i++, true);
+            }
+        }
+        if (min_size_k != 0)
+        {
+            size_t split_size = min_size_k;
+            if (split_size == -1)
+            {
+                split_size = sample_resolution;
+            }
+            uint32_t mask = 0xFFFFFFFFu >> (32 - split_size);
+            int k = 0;
+            if (reference)
+            {
+                k = 1;
+            }
+            for (k; k < preprocessed_block.size(); ++k)
+            {
+                uint32_t sample = preprocessed_block[k];
+                uint32_t split_bits = sample & mask;
+                for (int j = 1; j <= split_size; ++j)
+                {
+                    bool val = (split_bits >> (split_size - j)) & 1;
+                    set_bit(result.first, i++, val);
+                }
+            }
         }
     }
-    if (min_size_k != 0)
+    else
     {
-        size_t split_size = min_size_k;
-        if (split_size == -1)
+        int k = 0;
+        if (reference)
         {
-            split_size = sample_resolution;
+            k = 1;
         }
-        uint32_t mask = 0xFFFFFFFFu >> (32 - split_size);
-        for (const auto sample : block)
+        for (k; k < preprocessed_block.size(); ++k)
         {
-            uint32_t split_bits = sample & mask;
-            for (int j = 1; j <= split_size; ++j)
+            uint32_t sample = preprocessed_block[k];
+            for (int j = 1; j <= sample_resolution; ++j)
             {
-                bool val = (split_bits >> (split_size - j)) & 1;
+                bool val = (sample >> (sample_resolution - j)) & 1;
                 set_bit(result.first, i++, val);
             }
         }
@@ -327,6 +376,14 @@ std::pair<std::vector<BYTE>, size_t> encoding_machine::encode_zero_blocks(size_t
     for (int j = 0; j < no_compression_prefix_size + 1; ++j)
     {
         set_bit(result.first, i++, false);
+    }
+    if (reference)
+    {
+        for (int j = 1; j <= sample_resolution; ++j)
+        {
+            bool value = (reference_value >> (sample_resolution - j)) & 1;
+            set_bit(result.first, i++, value);
+        }
     }
     size_t trailing_zeroes_count = zero_block_count;
     if (zero_block_count < 5)

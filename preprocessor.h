@@ -6,7 +6,7 @@
 class preprocessor
 {
 public:
-    virtual uint64_t get_preprocessed(uint64_t sample) = 0;
+    virtual uint64_t get_preprocessed(uint32_t sample) = 0;
     virtual uint64_t get_reference() = 0;
     virtual ~preprocessor() = default;
 };
@@ -21,7 +21,7 @@ private:
     uint64_t map(int64_t error);
 public:
     unit_delay_preprocesson(unsigned int sample_size);
-    uint64_t get_preprocessed(uint64_t sample) override;
+    uint64_t get_preprocessed(uint32_t sample) override;
     uint64_t get_reference() override;
 	~unit_delay_preprocesson() override = default;
 };
