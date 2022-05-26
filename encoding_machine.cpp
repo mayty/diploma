@@ -43,7 +43,6 @@ unsigned int get_no_compression_prefix_size(unsigned int sample_resolution)
 void encoding_machine::feed_data_from_file(const std::string& filename)
 {
     in_file.open(filename, std::ifstream::in | std::ifstream::binary);
-    return;
     std::ifstream in = std::ifstream{ filename, std::ifstream::in | std::ifstream::binary };
 
     this->was_encoded = false;
@@ -224,6 +223,7 @@ void encoding_machine::save_to_file(const std::string& filename)
     {
         file.write((const char*)(&byte), 1);
     }
+    file.close();
 }
 
 std::vector<BYTE> encoding_machine::get_encoded_data()
